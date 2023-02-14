@@ -3,123 +3,87 @@ const express = require("express");
 const userModel = require("../models/user");
 const app = express();
 const jwt = require('jsonwebtoken');
+const { find } = require('../models/user');
 
 app.use(express.json());
 
-
-
-// app.post("/add_user", async (request, response) => {
-//     const user = new userModel(request.body);
-//     const usern = {name:user};
-
-//     const accessToken = jwt.sign(usern,process.env.ACCESS_TOKEN_SECRET)
-
-//     res.json( {accessToken: accessToken});
-
-//     try {
-//       await user.save();
-//       response.send(user);
-//     } catch (error) {
-//       response.status(400).send(error);
-//     }
-// });
-
-app.post("/register", async (req, res) => {
+app.post("/register&login", async (req, res) => {
   try{
-    const {username} = req.body;
-    console.log(username);
+    const {username,password} = req.body;
+    console.log(username,password);
 
     const newUser = await userModel.findOne({username});
     if(!newUser){
       const result = await userModel.create({
         username,
+        password
       })
 
       const token = jwt.sign({result}, process.env.ACCESS_TOKEN_SECRET, {
         expiresIn: "1hr"
       })
-      res.cookie("token", token).send("hello")
+      res.cookie('token', token, { 
+        httpOnly: true, 
+        maxAge: 3600000 // 1 hour 
+      }).send(token);
     }
     else{
       res.send("user exists");
     }
-
-    // console.log(req.body);
-
-    // const newuser = userModel.findOne({username})
-    // if (!newuser) {
-      
-    //   const result = await userModel.save({username: Shehryar});
-    //   console.log(result);
-
-    //   // console.log(accessToken)
-    //   // const accessToken = jwt.sign(req.body,process.env.ACCESS_TOKEN_SECRET)
-    //   // console.log("ecdfsc")
-    //   res.status(200);
-    // }
-    // else {
-    //   console.log("user exist")
-    //   res.sendStatus(400).send(err)
-    // }
   }
     catch (error){
     console.log(error)
       
     }
   }
- 
-
 );
 
-app.get("/posts", authenticateToken, (req,res) => {
+app.get("/getallusers", authenticateToken, async (req,res) => {
 
   console.log("oiuyt")
 
-  const users =  userModel.find({});
-  console.log(users)
-  res.json(users.filter(users => users.username === req.username))
+  console.log();
+  const users =  await userModel.find({});
+
+  res.send(users)
 });
 
-function authenticateToken(req,res,next) {
-  console.log(req)
+function authenticateToken(req, res, next) {
 
-  const authHeader  = req.body['Authorization'];
-  console.log(authHeader)
-  const token = authHeader && authHeader.split('')[1]
-  if (token == null) return res.sendStatus(401);
+  const token = req.cookies.token;
+  console.log(token);
+  if (!token) return res.sendStatus(401);
 
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET,(err,user)=>{
-    if(err)return res.sendStatus(403)
-  req.user = user 
-  next()
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
 
- })
+    if(req.body.username == user.result.username ){
+      //res.send({message : "Verified"})
+    }else{
+      res.sendStatus(400).send({message : "Not verified"})
+    }
+   
+    next();
+  });
 }
 
-
-app.get("/users", async(request,response) => {
-    const users = await userModel.find({});
-  
+  app.put("/update_user", authenticateToken, async (req, res) => {
     try {
-      response.send(users);
-    } catch (error) {
-      response.status(400).send(error);
-    }
-  });
+      console.log(req.body.password)
 
-  app.put("/update_user", async (request, response) => {
-    try {
-      const user = await userModel.findOneAndUpdate({username: request.body.username}, request.body, {new: true});
-      response.send(user);
+      await userModel.findOneAndUpdate({username: req.body.username}, {password:req.body.password});
+      const user = await userModel.find({username:req.body.username})
+      res.send(user);
     } catch (error) {
-      response.status(500).send(error);
+      res.status(500).send(error);
     }
 });
 
-app.delete("/delete_user", async (request, response) => {
+app.delete("/delete_user", authenticateToken, async (request, response) => {
     try {
       const user = await userModel.deleteOne({username: request.body.username});
       response.send(user);
+      cookies.set('testtoken', {maxAge: 0});
     } catch (error) {
       response.status(500).send(error);
     }
